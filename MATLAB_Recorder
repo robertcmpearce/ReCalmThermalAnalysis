@@ -1,0 +1,93 @@
+clear
+clc
+
+prompt = 'Input the test number.';
+TestName = inputdlg(prompt);
+TestName = char(TestName);
+DateTimeNow = datestr(now, 'dd-mmm-yyyy_HH-MM');
+filePath = 'C:\Users\rober\Desktop\University Projects\S4 - London Semester 2 Projects\Major Project\Thermal Data\';
+
+%User Defined Properties 
+a = arduino;            % define the Arduino Communication port
+plotTitle = 'Arduino Data Log';  % plot title
+xLabel = 'Elapsed Time (s)';     % x-axis label
+yLabel = 'Temperature (C)';      % y-axis label
+legend1 = 'Temperature Sensor 1';
+yMax  = 45;                           %y Maximum Value
+yMin  = 20;                       %y minimum Value
+plotGrid = 'on';                 % 'off' to turn off grid
+min = 20;                         % set y-min
+max = 45;                        % set y-max
+delay = .01;                     % make sure sample faster than resolution
+
+%Define Function Variables
+time = 0;
+data = 0;
+count = 0;
+stienhart = 0.0;
+seriesResistor = 100000;
+thermistorRTResistance = 100000;
+BCoefficient = 3950;
+roomTemp = 25;
+smoothValue = 10;
+sum = 0.0;
+
+%Set up Plot
+plotGraph = plot(time,data,'-r' );  % every AnalogRead needs to be on its own Plotgraph
+hold on                            %hold on makes sure all of the channels are plotted
+title(plotTitle,'FontSize',15);
+xlabel(xLabel,'FontSize',15);
+ylabel(yLabel,'FontSize',15);
+legend(legend1);
+axis([yMin yMax min max]);
+grid(plotGrid);
+
+tic
+while ishandle(plotGraph) %Loop when Plot is Active will run until plot is closed
+         
+         
+         for r = 1:smoothValue
+         %Data from the arduino 
+         dat = readVoltage(a,'A0');   
+             
+         %calculate thermistor resistance
+         dat = 5.0 / dat - 1.0;
+         dat = seriesResistor / dat;
+         sum = dat + sum;
+         
+         pause(delay);
+         end
+         
+         average = sum / smoothValue;
+         sum = 0.0;
+         
+         %Calculate the temperature
+         steinhart = average / thermistorRTResistance;
+         steinhart = log(steinhart);
+         steinhart = steinhart / BCoefficient;
+         steinhart = steinhart + (1.0 / (roomTemp + 273.15));
+         steinhart = 1.0 / steinhart;
+         steinhart = steinhart - 273.15;
+         
+         %Add to the count and add the temp to the data
+         count = count + 1;    
+         time(count) = toc;      
+         data(count) = steinhart(1);         
+
+         %Create a vector with all the data points
+         data2save = [time(:), data(:)];
+         header = {'Time','Voltage'};
+         %data2save = [header; num2cell(data2save)];
+         %writematrix(data2save,'testfile.xls')
+         
+         %Write the vector to a file
+         FileName=[filePath,'Therm Test ',TestName,' _ ',DateTimeNow,'.csv'];
+         %d = datetime(now,'ConvertFrom','datenum')
+         csvwrite(FileName, data2save);
+         
+         %Update the live plot
+         set(plotGraph,'XData',time,'YData',data);
+         axis([0 time(count) min max]);
+         
+         pause(delay);
+end
